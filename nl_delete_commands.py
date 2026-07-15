@@ -52,6 +52,7 @@ def build_lte_scenario(enbid, site_list_1, cells, is_deletion, site_list_2=None,
     prechecks.append(f"cmedit get {site_list_1} TermPointToENB.(administrativeState,usedipAddress,operationalState,availabilityStatus,termpointtoenbId==310410-{enbid}) -t")
 
     set_delete = []
+    set_delete.append(f"cmedit get {site_list_1} TermPointToENB.(administrativeState,usedipAddress,operationalState,availabilityStatus,termpointtoenbId==310410-{enbid}) -t")
     set_delete.append(f"cmedit set {site_list_1} Termpointtoenb.(termpointtoenbId==310410-{enbid}) administrativestate=LOCKED")
     for cid in cell_ids:
         set_delete.append(f"cmedit delete {site_list_1} EUtranCellRelation.(eUtranCellRelationId==310410-{enbid}-{cid}) --force -ALL")
@@ -125,6 +126,8 @@ def build_5g_scenario(gnbid, gnodeb_name, site_list_1, cells, is_deletion, site_
         prechecks.append(f"cmedit get {site_list_1} {gnb_sector_discovery_command(gnbid).split('cmedit get ')[-1]}")
 
     set_delete = []
+    set_delete.append(f"cmedit get {site_list_1} {tpgnb_num} -t")
+    set_delete.append(f"cmedit get {site_list_1} {tpgnb_name} -t")
     set_delete.append(f"cmedit set {site_list_1} TermPointToGNB.(termpointtognbId==310410-000000{gnbid}) administrativestate=LOCKED")
     set_delete.append(f"cmedit set {site_list_1} TermPointToGNB.(termpointtognbId=={gnodeb_name}) administrativestate=LOCKED")
     for cid in cell_ids:
