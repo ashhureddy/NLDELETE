@@ -1,0 +1,115 @@
+import streamlit as st
+import openpyxl
+import io
+
+import nl_delete_core as core
+from nl_delete_commands import lte_sector_discovery_command, lte_node_discovery_command, gnb_sector_discovery_command, gnb_node_discovery_command
+from nl_delete_assemble import assemble_outputs
+
+st.set_page_config(page_title="NL Delete", layout="wide")
+
+st.markdown(
+    """
+    <style>
+    .qkx-scenario-card { border: 1px solid #d8dee8; border-radius: 8px; padding: 14px 18px; margin-bottom: 14px; background: #fbfcfe; }
+    .qkx-scenario-title { font-weight: 700; font-size: 1.05rem; }
+    .qkx-badge-delete { background:#fdeaea; color:#b3261e; padding:2px 10px; border-radius:12px; font-size:0.78rem; font-weight:600; }
+    .qkx-badge-survive { background:#e8f1fd; color:#1a56b0; padding:2px 10px; border-radius:12px; font-size:0.78rem; font-weight:600; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.title("NL Delete Tool")
+st.caption("Neighbor Relation deletion — sector moves/deletes and full identity deletions, LTE + 5G")
+
+if "nl_scenarios" not in st.session_state:
+    st.session_state.nl_scenarios = None
+if "nl_user_inputs" not in st.session_state:
+    st.session_state.nl_user_inputs = {}
+
+with st.container(border=True):
+    st.subheader("1. Inputs")
+    c1, c2 = st.columns(2)
+    with c1:
+        ciq_file = st.file_uploader("CIQ (.xlsx)", type=["xlsx"])
+    with c2:
+        precheck_file = st.file_uploader("Pre-checks (.pdf)", type=["pdf"])
+    analyze = st.button("Analyze \u2192", type="primary", disabled=not (ciq_file and precheck_file))
+
+if analyze:
+    import pdfplumber
+    ciq_wb = openpyxl.load_workbook(io.BytesIO(ciq_file.read()), data_only=True)
+    with pdfplumber.open(io.BytesIO(precheck_file.read())) as pdf:
+        precheck_text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+
+    pre_state = core.parse_precheck_pre_state(precheck_text)
+    post_state = core.parse_ciq_post_state(ciq_wb)
+    move_rows = core.parse_sector_del_movement(ciq_wb)
+    scenarios = core.build_scenarios(pre_state, post_state, move_rows)
+
+    st.session_state.nl_scenarios = scenarios
+    st.session_state.nl_user_inputs = {}
+    if not scenarios:
+        st.warning("No sector moves/deletes or identity deletions detected between Pre-checks and the CIQ.")
+
+scenarios = st.session_state.nl_scenarios
+
+if scenarios:
+    st.subheader("2. Detected scenarios")
+    for s in scenarios:
+        key = (s["node"], s["tech"])
+        is_deletion = s["status"] == "deletes"
+        badge = '<span class="qkx-badge-delete">FULL IDENTITY DELETION</span>' if is_deletion else '<span class="qkx-badge-survive">SECTOR MOVE/DELETE</span>'
+        with st.container(border=True):
+            st.markdown(f'<div class="qkx-scenario-title">{s["node"]} &nbsp;[{s["tech"]}]&nbsp; {badge}</div>', unsafe_allow_html=True)
+            st.caption(f'{len(s["cells"])} cell(s): ' + ", ".join(str(c.get("cell_id")) for c in s["cells"]))
+
+            ui = st.session_state.nl_user_inputs.setdefault(key, {})
+
+            if is_deletion:
+                id_label = "eNBId" if s["tech"] == "LTE" else "gNBId"
+                id_val = st.text_input(f"{id_label} for {s['node']} (not in CIQ \u2014 enter manually)", key=f"id_{key}")
+                ui["id_value"] = id_val
+                if s["tech"] == "5G":
+                    ui["gnodeb_name"] = st.text_input("gNodeB Name", value=s["node"], key=f"gnbname_{key}")
+                ui["delete_node_site_id"] = st.text_input("Delete Node Site ID (from Pre-checks)", value=s["node"], key=f"delid_{key}")
+
+                if id_val:
+                    if s["tech"] == "LTE":
+                        st.code(lte_sector_discovery_command(id_val), language=None)
+                        st.code(lte_node_discovery_command(id_val), language=None)
+                    else:
+                        st.code(gnb_sector_discovery_command(id_val), language=None)
+                        st.code(gnb_node_discovery_command(ui.get("gnodeb_name", s["node"]), id_val), language=None)
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        ui["site_list_1"] = st.text_area("Site List 1 (sector-level result)", key=f"sl1_{key}", height=80)
+                    with c2:
+                        ui["site_list_2"] = st.text_area("Site List 2 (node-level result)", key=f"sl2_{key}", height=80)
+                else:
+                    st.info("Enter the ID above to reveal the Site List discovery commands.")
+
+            else:
+                id_val = s["id_value"]
+                ui["id_value"] = id_val
+                if s["tech"] == "5G":
+                    ui["gnodeb_name"] = st.text_input("gNodeB Name", value=s["node"], key=f"gnbname_{key}")
+                    st.code(gnb_sector_discovery_command(id_val), language=None)
+                else:
+                    st.code(lte_sector_discovery_command(id_val), language=None)
+                ui["site_list_1"] = st.text_area("Site List 1 (result)", key=f"sl1_{key}", height=80)
+
+    st.subheader("3. Generate")
+    if st.button("Generate NL Delete output files \u2192", type="primary"):
+        set_text, get_text = assemble_outputs(scenarios, st.session_state.nl_user_inputs)
+        st.success("Generated.")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.download_button("Download SET/Delete commands", set_text, file_name="NL_Delete_SET.txt")
+        with c2:
+            st.download_button("Download GET (verification) commands", get_text, file_name="NL_Delete_GET.txt")
+        with st.expander("Preview SET/Delete commands"):
+            st.code(set_text, language=None)
+        with st.expander("Preview GET commands"):
+            st.code(get_text, language=None)
