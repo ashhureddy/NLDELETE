@@ -76,7 +76,6 @@ def build_lte_scenario(enbid, site_list_1, cells, is_deletion, site_list_2=None,
 
     node_step3 = []
     if is_deletion:
-        node_step3.append(f"# --- Step 3: auto-created ExternalENodeBFunction cleanup (Site List 2) ---")
         node_step3.append(lte_node_discovery_command(enbid))
         node_step3.append(f"cmedit set {site_list_2}  ExternalENodeBFunction.(ExternalENodeBFunctionId==auto310_410_3_{enbid}),TermPointToENodeB.(TermPointToENodeBId==auto1) administrativestate:LOCKED")
         node_step3.append(f"cmedit delete {site_list_2}  ExternalENodeBFunction.(ExternalENodeBFunctionID==auto310_410_3_{enbid}) -ALL")
@@ -162,7 +161,6 @@ def build_5g_scenario(gnbid, gnodeb_name, site_list_1, cells, is_deletion, site_
 
     node_step3 = []
     if is_deletion:
-        node_step3.append("# --- Step 3: ExternalGNBCUCPFunction cleanup (Site List 2) ---")
         node_step3.append(gnb_node_discovery_command(gnodeb_name, gnbid))
         node_step3.append(f"cmedit set {site_list_2} ExternalGNBCUCPFunction.(ExternalGNBCUCPFunctionid==auto310_410_3_{gnbid}),TermPointToGNodeB.(TermPointToGNodeBid==auto1) administrativestate:LOCKED --force")
         node_step3.append(f"cmedit set {site_list_2} ExternalGNBCUCPFunction.(ExternalGNBCUCPFunctionid=={delete_node_site_id}),TermPointToGNodeB.(TermPointToGNodeBid==auto1) administrativestate:LOCKED --force")
