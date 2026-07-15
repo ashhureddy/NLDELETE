@@ -20,8 +20,6 @@ def assemble_outputs(scenarios, user_inputs):
         id_value = ui.get("id_value") or s["id_value"] or "<ID>"
         delete_node_site_id = ui.get("delete_node_site_id", s["node"]) if is_deletion else None
 
-        header = f"{'=' * 70}\n{s['node']}  [{s['tech']}]  {'FULL IDENTITY DELETION' if is_deletion else 'SECTOR MOVE/DELETE'}  ({len(s['cells'])} cell(s))\n{'=' * 70}"
-
         if s["tech"] == "LTE":
             blocks = build_lte_scenario(
                 enbid=id_value, site_list_1=site_list_1, cells=s["cells"], is_deletion=is_deletion,
@@ -34,13 +32,12 @@ def assemble_outputs(scenarios, user_inputs):
                 is_deletion=is_deletion, site_list_2=site_list_2, delete_node_site_id=delete_node_site_id,
             )
 
-        set_parts = [header, "\n-- Step 2: Execution (SET / DELETE) --", blocks["set_delete"]]
+        set_parts = [blocks["set_delete"]]
         if blocks["node_step3"]:
             set_parts.append(blocks["node_step3"])
         set_blocks.append("\n".join(set_parts))
 
-        get_parts = [header, "\n-- Verify post NL delete --", blocks["postchecks_get"]]
-        get_blocks.append("\n".join(get_parts))
+        get_blocks.append(blocks["postchecks_get"])
 
     set_delete_text = "\n\n\n".join(set_blocks)
     get_commands_text = "\n\n\n".join(get_blocks)
