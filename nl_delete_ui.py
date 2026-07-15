@@ -76,17 +76,23 @@ if scenarios:
                 ui["delete_node_site_id"] = st.text_input("Delete Node Site ID (from Pre-checks)", value=s["node"], key=f"delid_{key}")
 
                 if id_val:
+                    st.markdown("**Run for Site List 1 (sector-level):**")
                     if s["tech"] == "LTE":
                         st.code(lte_sector_discovery_command(id_val), language=None)
-                        st.code(lte_node_discovery_command(id_val), language=None)
                     else:
                         st.code(gnb_sector_discovery_command(id_val), language=None)
+
+                    st.markdown("**Run for Site List 2 (node-level):**")
+                    if s["tech"] == "LTE":
+                        st.code(lte_node_discovery_command(id_val), language=None)
+                    else:
                         st.code(gnb_node_discovery_command(ui.get("gnodeb_name", s["node"]), id_val), language=None)
+
                     c1, c2 = st.columns(2)
                     with c1:
-                        ui["site_list_1"] = st.text_area("Site List 1 (sector-level result)", key=f"sl1_{key}", height=80)
+                        ui["site_list_1"] = st.text_area("Site List 1 result (sector-level)", key=f"sl1_{key}", height=80)
                     with c2:
-                        ui["site_list_2"] = st.text_area("Site List 2 (node-level result)", key=f"sl2_{key}", height=80)
+                        ui["site_list_2"] = st.text_area("Site List 2 result (node-level)", key=f"sl2_{key}", height=80)
                 else:
                     st.info("Enter the ID above to reveal the Site List discovery commands.")
 
