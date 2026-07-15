@@ -39,12 +39,7 @@ def assemble_outputs(scenarios, user_inputs):
             set_parts.append(blocks["node_step3"])
         set_blocks.append("\n".join(set_parts))
 
-        get_parts = [
-            header,
-            "\n-- Step 1: Prechecks (GET) --", blocks["prechecks_get"],
-            "\n-- Step 2: Post-delete verification (GET) --", blocks["get_verify"],
-            "\n-- Step 3/4: Postchecks (GET) --", blocks["postchecks_get"],
-        ]
+        get_parts = [header, "\n-- Verify post NL delete --", blocks["postchecks_get"]]
         get_blocks.append("\n".join(get_parts))
 
     set_delete_text = "\n\n\n".join(set_blocks)
