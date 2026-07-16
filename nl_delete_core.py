@@ -257,3 +257,37 @@ def build_pre_post_config_lines(pre_state, post_state):
             post_labels.append(post_label)
 
     return " + ".join(pre_labels), " + ".join(post_labels)
+
+
+def extract_own_id_from_kgetall(kgetall_text, node, mo_class, attr_name):
+    """Parses a 'kget all' dump (a sequence of MO blocks, each starting with an 'MO  <path>'
+    header line followed by that block's attribute lines) and returns the value of attr_name
+    within the specific MO block matching MeContext=<node>,ManagedElement=<node>,<mo_class>.
+    mo_class: 'ENodeBFunction=1' or 'GNBCUCPFunction=1'. Returns None if not found (e.g. a
+    5G-only node has no ENodeBFunction=1 block at all)."""
+    if not kgetall_text:
+        return None
+    lines = kgetall_text.splitlines()
+    target_suffix = f"MeContext={node},ManagedElement={node},{mo_class}"
+    start_idx = None
+    for i, line in enumerate(lines):
+        if line.strip().startswith("MO ") and target_suffix in line:
+            start_idx = i
+            break
+    if start_idx is None:
+        return None
+    for j in range(start_idx + 1, len(lines)):
+        if lines[j].strip().startswith("MO ") and "MeContext=" in lines[j]:
+            break
+        m = re.match(rf'^{attr_name}\s+(\S+)', lines[j].strip())
+        if m:
+            return m.group(1)
+    return None
+
+
+def extract_own_enbid(kgetall_text, node):
+    return extract_own_id_from_kgetall(kgetall_text, node, "ENodeBFunction=1", "eNBId")
+
+
+def extract_own_gnbid(kgetall_text, node):
+    return extract_own_id_from_kgetall(kgetall_text, node, "GNBCUCPFunction=1", "gNBId")
