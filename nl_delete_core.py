@@ -55,18 +55,35 @@ def sheet_objs(ws):
 # ============================================================
 
 SUMMARY_STATUS_ROW_RE = re.compile(r'(\S+)\s+(LTE|5G)\s+(\S+)\s+(UNLOCKED|LOCKED)')
+LTE_CELL_PREFIX_RE = re.compile(r'^(.+?)_\d[A-F]_\d+(_[EF])?$')
+FIVEG_CELL_PREFIX_RE = re.compile(r'^(.+?)_N\d{3}[A-F]_\d+$')
+
+
+def _identity_name_from_cell(cell_name, tech):
+    """The Pre-checks 'Node' column is just the physical-site grouping — the actual
+    eNodeB/gNodeB Name for each technology has to be derived from its own cells' naming,
+    since it can genuinely differ from the Node column (confirmed with real data: Node
+    'FCL08071R' but its 5G cells are prefixed 'FCON098071_...', not 'FCL08071R_...')."""
+    pattern = LTE_CELL_PREFIX_RE if tech == "LTE" else FIVEG_CELL_PREFIX_RE
+    m = pattern.match(str(cell_name))
+    return m.group(1) if m else None
 
 
 def parse_precheck_pre_state(precheck_text):
-    """Returns {node_name: {"LTE": bool, "5G": bool}} from Pre-checks' Summary Status table."""
+    """Returns {physical_site: {"LTE": identity_name_or_None, "5G": identity_name_or_None}}
+    from Pre-checks' Summary Status table. physical_site (the Node column) is only a grouping
+    key; the per-technology values are each technology's REAL derived identity name."""
     pre_state = {}
     if not precheck_text:
         return pre_state
     for m in SUMMARY_STATUS_ROW_RE.finditer(precheck_text):
         node, tech, cell, admin = m.groups()
         node = node.strip()
-        pre_state.setdefault(node, {"LTE": False, "5G": False})
-        pre_state[node][tech] = True
+        pre_state.setdefault(node, {"LTE": None, "5G": None})
+        if pre_state[node][tech] is None:
+            identity_name = _identity_name_from_cell(cell, tech)
+            if identity_name:
+                pre_state[node][tech] = identity_name
     return pre_state
 
 
@@ -90,19 +107,21 @@ def classify_identities(pre_state, post_state):
     """For every node seen in Pre-checks, classify each technology it had as either surviving
     (with its CIQ-derived ID) or deleting (flagged, no ID available — needs manual entry).
     Returns a list of dicts: {"node": str, "tech": "LTE"|"5G", "status": "survives"|"deletes",
-    "id_value": <eNBId/gNBId or None>}."""
+    "id_value": <eNBId/gNBId or None>, "identity_name": <the real derived eNodeB/gNodeB Name>}.
+    'node' stays as the physical-site grouping key (for UI grouping only); 'identity_name' is
+    the correct value to use for anything naming-specific (gNodeB_Name, delete-node site ID)."""
     results = []
     for node, techs in pre_state.items():
         post_node = post_state.get(node)
-        for tech, had_it in techs.items():
-            if not had_it:
+        for tech, identity_name in techs.items():
+            if not identity_name:
                 continue
             id_field = "eNBId" if tech == "LTE" else "gNBId"
             post_value = post_node.get(id_field) if post_node else None
             if is_populated(post_value):
-                results.append({"node": node, "tech": tech, "status": "survives", "id_value": post_value})
+                results.append({"node": node, "tech": tech, "status": "survives", "id_value": post_value, "identity_name": identity_name})
             else:
-                results.append({"node": node, "tech": tech, "status": "deletes", "id_value": None})
+                results.append({"node": node, "tech": tech, "status": "deletes", "id_value": None, "identity_name": identity_name})
     return results
 
 
