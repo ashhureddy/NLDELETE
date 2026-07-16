@@ -301,3 +301,35 @@ def find_own_id_in_any_kgetall(kgetall_texts, node, tech):
         if id_val:
             return id_val
     return None
+
+
+def find_duplicate_site_list_entries(site_list_text):
+    """Splits a pasted site list (semicolon, comma, or newline separated — matching ENM's
+    own A*;B*;C*... convention) and returns any entries that appear more than once,
+    preserving first-seen order. Empty/whitespace entries are ignored."""
+    if not site_list_text:
+        return []
+    parts = re.split(r'[;,\n]+', site_list_text)
+    parts = [p.strip() for p in parts if p.strip()]
+    seen, dupes, dupes_seen = set(), [], set()
+    for p in parts:
+        if p in seen and p not in dupes_seen:
+            dupes.append(p)
+            dupes_seen.add(p)
+        seen.add(p)
+    return dupes
+
+
+def dedupe_site_list_entries(site_list_text):
+    """Splits a pasted site list (semicolon/comma/newline separated) and returns a cleaned,
+    semicolon-joined string with duplicates removed, preserving first-seen order."""
+    if not site_list_text:
+        return ""
+    parts = re.split(r'[;,\n]+', site_list_text)
+    parts = [p.strip() for p in parts if p.strip()]
+    seen, cleaned = set(), []
+    for p in parts:
+        if p not in seen:
+            cleaned.append(p)
+            seen.add(p)
+    return ";".join(cleaned)
