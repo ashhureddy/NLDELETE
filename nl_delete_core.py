@@ -291,3 +291,13 @@ def extract_own_enbid(kgetall_text, node):
 
 def extract_own_gnbid(kgetall_text, node):
     return extract_own_id_from_kgetall(kgetall_text, node, "GNBCUCPFunction=1", "gNBId")
+
+
+def find_own_id_in_any_kgetall(kgetall_texts, node, tech):
+    """Tries extraction against every uploaded kget-all log (a node's data could be in any of
+    them, regardless of filename) and returns the first match found."""
+    for text in kgetall_texts or []:
+        id_val = extract_own_enbid(text, node) if tech == "LTE" else extract_own_gnbid(text, node)
+        if id_val:
+            return id_val
+    return None
