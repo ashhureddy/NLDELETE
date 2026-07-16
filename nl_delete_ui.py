@@ -47,8 +47,11 @@ if analyze:
     post_state = core.parse_ciq_post_state(ciq_wb)
     move_rows = core.parse_sector_del_movement(ciq_wb)
     scenarios = core.build_scenarios(pre_state, post_state, move_rows)
+    pre_line, post_line = core.build_pre_post_config_lines(pre_state, post_state)
 
     st.session_state.nl_scenarios = scenarios
+    st.session_state.nl_pre_line = pre_line
+    st.session_state.nl_post_line = post_line
     st.session_state.nl_user_inputs = {}
     if not scenarios:
         st.warning("No sector moves/deletes or identity deletions detected between Pre-checks and the CIQ.")
@@ -71,9 +74,11 @@ def render_scenario_inputs(s):
         id_label = "eNBId" if s["tech"] == "LTE" else "gNBId"
         id_val = st.text_input(f"{id_label} for {s['identity_name']} (not in CIQ \u2014 enter manually)", key=f"id_{key}")
         ui["id_value"] = id_val
+        ui["gnodeb_name"] = s["identity_name"]
+        ui["delete_node_site_id"] = s["identity_name"]
         if s["tech"] == "5G":
-            ui["gnodeb_name"] = st.text_input("gNodeB Name", value=s["identity_name"], key=f"gnbname_{key}")
-        ui["delete_node_site_id"] = st.text_input("Delete Node Site ID (from Pre-checks)", value=s["identity_name"], key=f"delid_{key}")
+            st.caption(f"gNodeB Name: **{s['identity_name']}**")
+        st.caption(f"Delete Node Site ID: **{s['identity_name']}**")
 
         if id_val:
             st.markdown("**Run for Site List 1 (sector-level):**")
@@ -97,7 +102,8 @@ def render_scenario_inputs(s):
         id_val = s["id_value"]
         ui["id_value"] = id_val
         if s["tech"] == "5G":
-            ui["gnodeb_name"] = st.text_input("gNodeB Name", value=s["identity_name"], key=f"gnbname_{key}")
+            ui["gnodeb_name"] = s["identity_name"]
+            st.caption(f"gNodeB Name: **{s['identity_name']}**")
             st.code(gnb_sector_discovery_command(id_val), language=None)
         else:
             st.code(lte_sector_discovery_command(id_val), language=None)
@@ -105,6 +111,10 @@ def render_scenario_inputs(s):
 
 
 if scenarios:
+    with st.container(border=True):
+        st.markdown(f"**Pre Configuration:** {st.session_state.get('nl_pre_line', '')}")
+        st.markdown(f"**Post Configuration:** {st.session_state.get('nl_post_line', '')}")
+
     st.subheader("2. Detected scenarios")
 
     # Group by physical site (Pre-checks' Node column) so LTE + 5G for the same site
