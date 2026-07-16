@@ -106,7 +106,11 @@ def render_scenario_inputs(s):
                 st.code(lte_node_discovery_command(id_val), language=None)
             else:
                 st.code(gnb_node_discovery_command(ui.get("gnodeb_name", s["identity_name"]), id_val), language=None)
-            ui["site_list_2"] = st.text_area("Site List 2 result (node-level)", key=f"sl2_{key}", height=80)
+            sl2_raw = st.text_area("Site List 2 result (node-level)", key=f"sl2_{key}", height=80)
+            ui["site_list_2"] = core.dedupe_site_list_entries(sl2_raw)
+            dupes = core.find_duplicate_site_list_entries(sl2_raw)
+            if dupes:
+                st.info(f"Removed duplicate Site IDs: {', '.join(dupes)}")
         else:
             st.info("Enter the ID above to reveal the Site List discovery commands.")
 
