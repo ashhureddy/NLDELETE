@@ -38,7 +38,7 @@ def gnb_node_discovery_command(gnodeb_name, gnbid):
     )
 
 
-def build_lte_scenario(enbid, site_list_1, cells, is_deletion, site_list_2=None, delete_node_site_id=None):
+def build_lte_scenario(enbid, site_list_1, cells, is_deletion, site_list_2=None, delete_node_site_id=None, include_node_existence_check=True):
     """cells: [{"cell_id":...}]. Returns {"prechecks_get","set_delete","get_verify","postchecks_get"}."""
     cell_ids = [c["cell_id"] for c in cells]
 
@@ -89,8 +89,9 @@ def build_lte_scenario(enbid, site_list_1, cells, is_deletion, site_list_2=None,
         postchecks.append(f"cmedit get {site_list_1} ExternalEnodeBFunction.(ExternalENodeBFunctionId==310410-{enbid}) -t")
         postchecks.append(lte_node_discovery_command(enbid))
         postchecks.append(lte_sector_discovery_command(enbid))
-        postchecks.append(f"\ncmedit get {delete_node_site_id} ComConnectivityInformation.*")
-        postchecks.append(f"cmedit get NetworkElement={delete_node_site_id},CmFunction=1")
+        if include_node_existence_check:
+            postchecks.append(f"\ncmedit get {delete_node_site_id} ComConnectivityInformation.*")
+            postchecks.append(f"cmedit get NetworkElement={delete_node_site_id},CmFunction=1")
 
     return {
         "prechecks_get": "\n".join(prechecks),
@@ -101,7 +102,7 @@ def build_lte_scenario(enbid, site_list_1, cells, is_deletion, site_list_2=None,
     }
 
 
-def build_5g_scenario(gnbid, gnodeb_name, site_list_1, cells, is_deletion, site_list_2=None, delete_node_site_id=None):
+def build_5g_scenario(gnbid, gnodeb_name, site_list_1, cells, is_deletion, site_list_2=None, delete_node_site_id=None, include_node_existence_check=True):
     """cells: [{"cell_id":..., "cell_name":...}]."""
     cell_ids = [c["cell_id"] for c in cells]
     cell_names = [c["cell_name"] for c in cells]
@@ -177,8 +178,9 @@ def build_5g_scenario(gnbid, gnodeb_name, site_list_1, cells, is_deletion, site_
     if is_deletion:
         postchecks.append(gnb_node_discovery_command(gnodeb_name, gnbid))
         postchecks.append(gnb_sector_discovery_command(gnbid))
-        postchecks.append(f"\ncmedit get {delete_node_site_id} ComConnectivityInformation.*")
-        postchecks.append(f"cmedit get NetworkElement={delete_node_site_id},CmFunction=1")
+        if include_node_existence_check:
+            postchecks.append(f"\ncmedit get {delete_node_site_id} ComConnectivityInformation.*")
+            postchecks.append(f"cmedit get NetworkElement={delete_node_site_id},CmFunction=1")
 
     return {
         "prechecks_get": "\n".join(prechecks),
