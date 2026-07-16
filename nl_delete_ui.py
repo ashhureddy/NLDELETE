@@ -30,14 +30,22 @@ if "nl_user_inputs" not in st.session_state:
 
 with st.container(border=True):
     st.subheader("1. Inputs")
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     with c1:
         ciq_file = st.file_uploader("CIQ (.xlsx)", type=["xlsx"])
     with c2:
         precheck_file = st.file_uploader("Pre-checks (.pdf)", type=["pdf"])
+    with c3:
+        kgetall_files = st.file_uploader(
+            "Pre 'kget all' logs (one per node, any that apply)",
+            type=["log", "txt"], accept_multiple_files=True,
+        )
     analyze = st.button("Analyze \u2192", type="primary", disabled=not (ciq_file and precheck_file))
 
 if analyze:
+    st.session_state.nl_kgetall_texts = [
+        f.read().decode("utf-8", errors="replace") for f in (kgetall_files or [])
+    ]
     import pdfplumber
     ciq_wb = openpyxl.load_workbook(io.BytesIO(ciq_file.read()), data_only=True)
     with pdfplumber.open(io.BytesIO(precheck_file.read())) as pdf:
@@ -72,21 +80,12 @@ def render_scenario_inputs(s):
 
     if is_deletion:
         id_label = "eNBId" if s["tech"] == "LTE" else "gNBId"
-        st.caption(f"Upload the Pre 'kget all' log for **{s['node']}** to auto-fill the {id_label}:")
-        kgetall_file = st.file_uploader(f"kget all log for {s['node']}", type=["log", "txt"], key=f"kgetall_{key}")
-        id_val = None
-        if kgetall_file is not None:
-            kgetall_text = kgetall_file.read().decode("utf-8", errors="replace")
-            if s["tech"] == "LTE":
-                id_val = core.extract_own_enbid(kgetall_text, s["node"])
-            else:
-                id_val = core.extract_own_gnbid(kgetall_text, s["node"])
-            if id_val:
-                st.success(f"{id_label} found: **{id_val}**")
-            else:
-                st.warning(f"Could not find {id_label} in that log for {s['node']} — enter it manually below.")
-        if not id_val:
-            id_val = st.text_input(f"{id_label} for {s['identity_name']} (manual entry)", key=f"id_{key}")
+        kgetall_texts = st.session_state.get("nl_kgetall_texts", [])
+        id_val = core.find_own_id_in_any_kgetall(kgetall_texts, s["node"], s["tech"])
+        if id_val:
+            st.success(f"{id_label} for {s['node']}: **{id_val}**")
+        else:
+            st.warning(f"No uploaded kget all log contains the {id_label} for {s['node']}.")
         ui["id_value"] = id_val
         ui["gnodeb_name"] = s["identity_name"]
         ui["delete_node_site_id"] = s["identity_name"]
