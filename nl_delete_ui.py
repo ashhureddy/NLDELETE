@@ -55,56 +55,74 @@ if analyze:
 
 scenarios = st.session_state.nl_scenarios
 
+
+def render_scenario_inputs(s):
+    """Renders the input widgets for one (node, tech) scenario and returns nothing —
+    writes into st.session_state.nl_user_inputs as a side effect, same as before."""
+    key = (s["node"], s["tech"])
+    is_deletion = s["status"] == "deletes"
+    badge = '<span class="qkx-badge-delete">FULL IDENTITY DELETION</span>' if is_deletion else '<span class="qkx-badge-survive">SECTOR MOVE/DELETE</span>'
+    st.markdown(f'<div class="qkx-scenario-title">[{s["tech"]}] &nbsp;{s["identity_name"]}&nbsp; {badge}</div>', unsafe_allow_html=True)
+    st.caption(f'{len(s["cells"])} cell(s): ' + ", ".join(str(c.get("cell_id")) for c in s["cells"]))
+
+    ui = st.session_state.nl_user_inputs.setdefault(key, {})
+
+    if is_deletion:
+        id_label = "eNBId" if s["tech"] == "LTE" else "gNBId"
+        id_val = st.text_input(f"{id_label} for {s['identity_name']} (not in CIQ \u2014 enter manually)", key=f"id_{key}")
+        ui["id_value"] = id_val
+        if s["tech"] == "5G":
+            ui["gnodeb_name"] = st.text_input("gNodeB Name", value=s["identity_name"], key=f"gnbname_{key}")
+        ui["delete_node_site_id"] = st.text_input("Delete Node Site ID (from Pre-checks)", value=s["identity_name"], key=f"delid_{key}")
+
+        if id_val:
+            st.markdown("**Run for Site List 1 (sector-level):**")
+            if s["tech"] == "LTE":
+                st.code(lte_sector_discovery_command(id_val), language=None)
+            else:
+                st.code(gnb_sector_discovery_command(id_val), language=None)
+
+            st.markdown("**Run for Site List 2 (node-level):**")
+            if s["tech"] == "LTE":
+                st.code(lte_node_discovery_command(id_val), language=None)
+            else:
+                st.code(gnb_node_discovery_command(ui.get("gnodeb_name", s["identity_name"]), id_val), language=None)
+
+            ui["site_list_1"] = st.text_area("Site List 1 result (sector-level)", key=f"sl1_{key}", height=80)
+            ui["site_list_2"] = st.text_area("Site List 2 result (node-level)", key=f"sl2_{key}", height=80)
+        else:
+            st.info("Enter the ID above to reveal the Site List discovery commands.")
+
+    else:
+        id_val = s["id_value"]
+        ui["id_value"] = id_val
+        if s["tech"] == "5G":
+            ui["gnodeb_name"] = st.text_input("gNodeB Name", value=s["identity_name"], key=f"gnbname_{key}")
+            st.code(gnb_sector_discovery_command(id_val), language=None)
+        else:
+            st.code(lte_sector_discovery_command(id_val), language=None)
+        ui["site_list_1"] = st.text_area("Site List 1 (result)", key=f"sl1_{key}", height=80)
+
+
 if scenarios:
     st.subheader("2. Detected scenarios")
+
+    # Group by physical site (Pre-checks' Node column) so LTE + 5G for the same site
+    # (e.g. FCL08071R primary / FCON098071 secondary) render together in one card.
+    by_site = {}
     for s in scenarios:
-        key = (s["node"], s["tech"])
-        is_deletion = s["status"] == "deletes"
-        badge = '<span class="qkx-badge-delete">FULL IDENTITY DELETION</span>' if is_deletion else '<span class="qkx-badge-survive">SECTOR MOVE/DELETE</span>'
+        by_site.setdefault(s["node"], []).append(s)
+
+    for site, site_scenarios in by_site.items():
         with st.container(border=True):
-            st.markdown(f'<div class="qkx-scenario-title">{s["node"]} &nbsp;[{s["tech"]}]&nbsp; {badge}</div>', unsafe_allow_html=True)
-            st.caption(f'{len(s["cells"])} cell(s): ' + ", ".join(str(c.get("cell_id")) for c in s["cells"]))
-
-            ui = st.session_state.nl_user_inputs.setdefault(key, {})
-
-            if is_deletion:
-                id_label = "eNBId" if s["tech"] == "LTE" else "gNBId"
-                id_val = st.text_input(f"{id_label} for {s['node']} (not in CIQ \u2014 enter manually)", key=f"id_{key}")
-                ui["id_value"] = id_val
-                if s["tech"] == "5G":
-                    ui["gnodeb_name"] = st.text_input("gNodeB Name", value=s["node"], key=f"gnbname_{key}")
-                ui["delete_node_site_id"] = st.text_input("Delete Node Site ID (from Pre-checks)", value=s["node"], key=f"delid_{key}")
-
-                if id_val:
-                    st.markdown("**Run for Site List 1 (sector-level):**")
-                    if s["tech"] == "LTE":
-                        st.code(lte_sector_discovery_command(id_val), language=None)
-                    else:
-                        st.code(gnb_sector_discovery_command(id_val), language=None)
-
-                    st.markdown("**Run for Site List 2 (node-level):**")
-                    if s["tech"] == "LTE":
-                        st.code(lte_node_discovery_command(id_val), language=None)
-                    else:
-                        st.code(gnb_node_discovery_command(ui.get("gnodeb_name", s["node"]), id_val), language=None)
-
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        ui["site_list_1"] = st.text_area("Site List 1 result (sector-level)", key=f"sl1_{key}", height=80)
-                    with c2:
-                        ui["site_list_2"] = st.text_area("Site List 2 result (node-level)", key=f"sl2_{key}", height=80)
-                else:
-                    st.info("Enter the ID above to reveal the Site List discovery commands.")
-
+            st.markdown(f'<div class="qkx-scenario-title">{site}</div>', unsafe_allow_html=True)
+            if len(site_scenarios) > 1:
+                cols = st.columns(len(site_scenarios))
+                for col, s in zip(cols, site_scenarios):
+                    with col:
+                        render_scenario_inputs(s)
             else:
-                id_val = s["id_value"]
-                ui["id_value"] = id_val
-                if s["tech"] == "5G":
-                    ui["gnodeb_name"] = st.text_input("gNodeB Name", value=s["node"], key=f"gnbname_{key}")
-                    st.code(gnb_sector_discovery_command(id_val), language=None)
-                else:
-                    st.code(lte_sector_discovery_command(id_val), language=None)
-                ui["site_list_1"] = st.text_area("Site List 1 (result)", key=f"sl1_{key}", height=80)
+                render_scenario_inputs(site_scenarios[0])
 
     st.subheader("3. Generate")
     if st.button("Generate NL Delete output files \u2192", type="primary"):
