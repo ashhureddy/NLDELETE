@@ -72,7 +72,21 @@ def render_scenario_inputs(s):
 
     if is_deletion:
         id_label = "eNBId" if s["tech"] == "LTE" else "gNBId"
-        id_val = st.text_input(f"{id_label} for {s['identity_name']} (not in CIQ \u2014 enter manually)", key=f"id_{key}")
+        st.caption(f"Upload the Pre 'kget all' log for **{s['node']}** to auto-fill the {id_label}:")
+        kgetall_file = st.file_uploader(f"kget all log for {s['node']}", type=["log", "txt"], key=f"kgetall_{key}")
+        id_val = None
+        if kgetall_file is not None:
+            kgetall_text = kgetall_file.read().decode("utf-8", errors="replace")
+            if s["tech"] == "LTE":
+                id_val = core.extract_own_enbid(kgetall_text, s["node"])
+            else:
+                id_val = core.extract_own_gnbid(kgetall_text, s["node"])
+            if id_val:
+                st.success(f"{id_label} found: **{id_val}**")
+            else:
+                st.warning(f"Could not find {id_label} in that log for {s['node']} — enter it manually below.")
+        if not id_val:
+            id_val = st.text_input(f"{id_label} for {s['identity_name']} (manual entry)", key=f"id_{key}")
         ui["id_value"] = id_val
         ui["gnodeb_name"] = s["identity_name"]
         ui["delete_node_site_id"] = s["identity_name"]
@@ -86,14 +100,13 @@ def render_scenario_inputs(s):
                 st.code(lte_sector_discovery_command(id_val), language=None)
             else:
                 st.code(gnb_sector_discovery_command(id_val), language=None)
+            ui["site_list_1"] = st.text_area("Site List 1 result (sector-level)", key=f"sl1_{key}", height=80)
 
             st.markdown("**Run for Site List 2 (node-level):**")
             if s["tech"] == "LTE":
                 st.code(lte_node_discovery_command(id_val), language=None)
             else:
                 st.code(gnb_node_discovery_command(ui.get("gnodeb_name", s["identity_name"]), id_val), language=None)
-
-            ui["site_list_1"] = st.text_area("Site List 1 result (sector-level)", key=f"sl1_{key}", height=80)
             ui["site_list_2"] = st.text_area("Site List 2 result (node-level)", key=f"sl2_{key}", height=80)
         else:
             st.info("Enter the ID above to reveal the Site List discovery commands.")
@@ -138,11 +151,29 @@ if scenarios:
     if st.button("Generate NL Delete output files \u2192", type="primary"):
         set_text, get_text = assemble_outputs(scenarios, st.session_state.nl_user_inputs)
         st.success("Generated.")
+
+        site_tag = "_".join(sorted({s["node"] for s in scenarios}))
+        set_filename = f"NL_Delete_SET_{site_tag}.txt"
+        get_filename = f"NL_Delete_GET_{site_tag}.txt"
+
         c1, c2 = st.columns(2)
         with c1:
-            st.download_button("Download SET/Delete commands", set_text, file_name="NL_Delete_SET.txt")
+            st.download_button("Download SET/Delete commands", set_text, file_name=set_filename)
         with c2:
-            st.download_button("Download GET (verification) commands", get_text, file_name="NL_Delete_GET.txt")
+            st.download_button("Download GET (verification) commands", get_text, file_name=get_filename)
+
+        import zipfile
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(set_filename, set_text)
+            zf.writestr(get_filename, get_text)
+        st.download_button(
+            "Download both (SET + GET) as .zip",
+            zip_buf.getvalue(),
+            file_name=f"NL_Delete_{site_tag}.zip",
+            mime="application/zip",
+        )
+
         with st.expander("Preview SET/Delete commands"):
             st.code(set_text, language=None)
         with st.expander("Preview GET commands"):
