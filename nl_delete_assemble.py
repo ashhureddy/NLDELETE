@@ -18,7 +18,7 @@ def assemble_outputs(scenarios, user_inputs):
         site_list_1 = ui.get("site_list_1", "<SiteList1>")
         site_list_2 = ui.get("site_list_2", "<SiteList2>") if is_deletion else None
         id_value = ui.get("id_value") or s["id_value"] or "<ID>"
-        delete_node_site_id = ui.get("delete_node_site_id", s["node"]) if is_deletion else None
+        delete_node_site_id = ui.get("delete_node_site_id", s["identity_name"]) if is_deletion else None
 
         if s["tech"] == "LTE":
             blocks = build_lte_scenario(
@@ -26,7 +26,7 @@ def assemble_outputs(scenarios, user_inputs):
                 site_list_2=site_list_2, delete_node_site_id=delete_node_site_id,
             )
         else:
-            gnodeb_name = ui.get("gnodeb_name", s["node"])
+            gnodeb_name = ui.get("gnodeb_name", s["identity_name"])
             blocks = build_5g_scenario(
                 gnbid=id_value, gnodeb_name=gnodeb_name, site_list_1=site_list_1, cells=s["cells"],
                 is_deletion=is_deletion, site_list_2=site_list_2, delete_node_site_id=delete_node_site_id,
