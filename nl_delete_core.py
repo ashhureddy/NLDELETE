@@ -177,16 +177,34 @@ def group_moves_by_node_and_tech(move_rows):
 # Scenario assembly — ties identity classification + cell groups together
 # ============================================================
 
+def determine_primary_tech(pre_state):
+    """For each physical site, the Node column value (constant across all its rows,
+    regardless of technology) matches one of the two derived identity names as a prefix —
+    that's the primary technology. Confirmed with real data: Node 'FCL06371R' starts with
+    the LTE identity 'FCL06371' but not the 5G identity 'FCON096371' -> LTE is primary."""
+    primary = {}
+    for node, techs in pre_state.items():
+        lte_name, fiveg_name = techs.get("LTE"), techs.get("5G")
+        if lte_name and node.startswith(lte_name):
+            primary[node] = "LTE"
+        elif fiveg_name and node.startswith(fiveg_name):
+            primary[node] = "5G"
+        else:
+            primary[node] = "LTE" if lte_name else ("5G" if fiveg_name else None)
+    return primary
+
+
 def build_scenarios(pre_state, post_state, move_rows):
     """Returns a list of scenario dicts, one per (node, tech) that has either an identity
     deletion or at least one moving/deleting cell:
       {"node", "tech", "status": "survives"|"deletes", "id_value": str_or_None,
-       "cells": [{"cell_id","cell_name"}, ...]}
+       "identity_name", "primary_tech": "LTE"|"5G"|None, "cells": [{"cell_id","cell_name"}, ...]}
     A node/tech with status "deletes" always appears (even with zero cells in Sector
     Del_Movement — the node-level cleanup still applies); a node/tech with status "survives"
     only appears if it actually has moving/deleting cells."""
     identities = classify_identities(pre_state, post_state)
     grouped_cells = group_moves_by_node_and_tech(move_rows)
+    primary_tech_by_site = determine_primary_tech(pre_state)
 
     scenarios = []
     seen_keys = set()
@@ -195,9 +213,47 @@ def build_scenarios(pre_state, post_state, move_rows):
         seen_keys.add(key)
         cells = grouped_cells.get(key, [])
         if ident["status"] == "deletes" or cells:
-            scenarios.append({**ident, "cells": cells})
+            scenarios.append({**ident, "cells": cells, "primary_tech": primary_tech_by_site.get(ident["node"])})
 
     # Any (node, tech) with moving cells but no matching Pre-checks identity entry (e.g. the
     # TARGET side of a move, or a node not seen in Pre-checks at all) is not a deletion scenario
     # on its own — nothing to add here; only SOURCE-side identities matter for NL delete.
     return scenarios
+
+
+def format_site_label(site, site_techs, primary_tech):
+    """site: the raw Pre-checks Node column value (matches CIQ's 'Node to be built as').
+    site_techs: {"LTE": name_or_None, "5G": name_or_None} — cell-derived identity names.
+    The PRIMARY technology displays as the raw site value (confirmed: 'FCL06371R(P)', not the
+    cell-derived 'FCL06371(P)'); the secondary technology displays as its own derived name,
+    since it never appears in the Node column at all."""
+    lte_name, fiveg_name = site_techs.get("LTE"), site_techs.get("5G")
+    if lte_name and fiveg_name:
+        secondary_name = fiveg_name if primary_tech == "LTE" else lte_name
+        return f"{site}(P)/{secondary_name}(S)"
+    if lte_name or fiveg_name:
+        return site
+    return ""
+
+
+def build_pre_post_config_lines(pre_state, post_state):
+    """Returns (pre_line, post_line) — e.g. 'FCL06371R(P)/FCON096371(S) + ALL04584' style
+    summary strings, one entry per physical site, for display at the top of results."""
+    primary_tech_by_site = determine_primary_tech(pre_state)
+    pre_labels, post_labels = [], []
+    for site, techs in pre_state.items():
+        primary_tech = primary_tech_by_site.get(site)
+        pre_label = format_site_label(site, techs, primary_tech)
+        if pre_label:
+            pre_labels.append(pre_label)
+
+        post_node = post_state.get(site, {})
+        post_techs = {
+            "LTE": techs.get("LTE") if is_populated(post_node.get("eNBId")) else None,
+            "5G": techs.get("5G") if is_populated(post_node.get("gNBId")) else None,
+        }
+        post_label = format_site_label(site, post_techs, primary_tech)
+        if post_label:
+            post_labels.append(post_label)
+
+    return " + ".join(pre_labels), " + ".join(post_labels)
